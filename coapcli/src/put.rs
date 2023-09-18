@@ -5,9 +5,9 @@ use std::{
 
 use clap::Args;
 use coapium::{
-    asynchronous::{put, put_payload},
     client::url::Url,
     codec::{option::ContentFormat, MediaType, Payload},
+    synchronous::{put, put_payload},
 };
 
 use crate::common::{parse_content_format, parse_url};
@@ -25,13 +25,13 @@ pub struct Put {
 }
 
 impl Put {
-    pub async fn run(self) -> Result<(), Box<dyn Error>> {
+    pub fn run(self) -> Result<(), Box<dyn Error>> {
         let payload = self.payload()?;
 
         let response = if payload.is_empty() {
-            put(self.url).await
+            put(self.url)
         } else {
-            put_payload(self.url.clone(), self.content_format(), payload).await
+            put_payload(self.url.clone(), self.content_format(), payload)
         }
         .map_err(|e| format!("{:?}", e))?;
 

@@ -9,8 +9,6 @@ use std::error::Error;
 
 use cli::Cli;
 
-// TODO: Should use the synchronous client when able
-#[tokio::main]
-pub async fn main() -> Result<(), Box<dyn Error>> {
-    Cli::run().await
+pub fn main() -> Result<(), Box<dyn Error>> {
+    Cli::run()
 }
