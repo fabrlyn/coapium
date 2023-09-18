@@ -7,7 +7,7 @@ use crate::{
     client::url::Url,
     codec::{
         message::{DeleteOptions, GetOptions, PostOptions, PutOptions},
-        Payload,
+        Payload, option::ContentFormat,
     },
     protocol::{
         delete::Delete,
@@ -25,6 +25,64 @@ use crate::{
 
 pub fn get(url: Url) -> Result<Response, response::Error> {
     request(Method::Get, url)
+}
+
+pub fn post(url: Url) -> Result<Response, response::Error> {
+    request(Method::Post, url)
+}
+
+pub fn post_payload(
+    url: Url,
+    content_format: ContentFormat,
+    payload: Payload,
+) -> Result<Response, response::Error> {
+    let client = Client::new(url.clone().into());
+
+    let reliability = default_reliability();
+
+    let mut options = PostOptions::new();
+    options.set_uri_path(url.path);
+    options.set_uri_query(url.query);
+    options.set_content_format(content_format);
+
+    let request = NewRequest::Post(Post {
+        options,
+        reliability,
+        payload,
+    });
+
+    client.execute(request)
+}
+
+pub fn put(url: Url) -> Result<Response, response::Error> {
+    request(Method::Put, url)
+}
+
+pub fn put_payload(
+    url: Url,
+    content_format: ContentFormat,
+    payload: Payload,
+) -> Result<Response, response::Error> {
+    let client = Client::new(url.clone().into());
+
+    let reliability = default_reliability();
+
+    let mut options = PutOptions::new();
+    options.set_uri_path(url.path);
+    options.set_uri_query(url.query);
+    options.set_content_format(content_format);
+
+    let request = NewRequest::Put(Put {
+        options,
+        reliability,
+        payload,
+    });
+
+    client.execute(request)
+}
+
+pub fn delete(url: Url) -> Result<Response, response::Error> {
+    request(Method::Delete, url)
 }
 
 pub fn request(method: Method, url: Url) -> Result<Response, response::Error> {

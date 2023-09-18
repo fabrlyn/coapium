@@ -4,7 +4,7 @@ use std::{
         mpsc::{channel, Receiver, Sender},
         Arc,
     },
-    time::Instant,
+    time::Instant, io::ErrorKind,
 };
 
 use log::error;
@@ -98,9 +98,18 @@ impl System {
         let mut events = vec![];
 
         let mut buffer = [0u8; PATH_MTU];
-        let read = self.udp_socket.recv(&mut buffer).unwrap();
+        let read = self.udp_socket.recv(&mut buffer);
 
-        events.push(Event::DataReceived(buffer[..read].to_vec()));
+        match read {
+            Ok(read) => {
+                events.push(Event::DataReceived(buffer[..read].to_vec()));
+            }
+            Err(e) => {
+                if e.kind() != ErrorKind::WouldBlock {
+                    return Err(());
+                }
+            }
+        }
 
         let now = Instant::now();
         while let Some(index) = self

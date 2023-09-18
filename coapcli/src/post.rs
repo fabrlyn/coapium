@@ -5,7 +5,7 @@ use std::{
 
 use clap::Args;
 use coapium::{
-    asynchronous::{post, post_payload},
+    synchronous::{post, post_payload},
     client::url::Url,
     codec::{option::ContentFormat, MediaType, Payload},
 };
@@ -25,13 +25,13 @@ pub struct Post {
 }
 
 impl Post {
-    pub async fn run(self) -> Result<(), Box<dyn Error>> {
+    pub fn run(self) -> Result<(), Box<dyn Error>> {
         let payload = self.payload()?;
 
         let response = if payload.is_empty() {
-            post(self.url).await
+            post(self.url)
         } else {
-            post_payload(self.url.clone(), self.content_format(), payload).await
+            post_payload(self.url.clone(), self.content_format(), payload)
         }
         .map_err(|e| format!("{:?}", e))?;
 

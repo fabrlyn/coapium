@@ -20,14 +20,14 @@ pub struct Cli {
 }
 
 impl Cli {
-    pub async fn run() -> Result<(), Box<dyn Error>> {
+    pub fn run() -> Result<(), Box<dyn Error>> {
         let cli = Cli::parse();
 
         match cli.commands {
-            Commands::Get(command) => command.run().await,
-            Commands::Post(command) => command.run().await,
-            Commands::Put(command) => command.run().await,
-            Commands::Delete(command) => command.run().await,
+            Commands::Get(command) => command.run(),
+            Commands::Post(command) => command.run(),
+            Commands::Put(command) => command.run(),
+            Commands::Delete(command) => command.run(),
         }
     }
 }

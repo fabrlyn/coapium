@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use clap::Args;
-use coapium::{asynchronous::get, client::url::Url};
+use coapium::{synchronous::get, client::url::Url};
 
 use crate::common::parse_url;
 
@@ -37,8 +37,8 @@ pub struct Get {
 }
 
 impl Get {
-    pub async fn run(self) -> Result<(), Box<dyn Error>> {
-        let response = get(self.url).await.unwrap();
+    pub fn run(self) -> Result<(), Box<dyn Error>> {
+        let response = get(self.url).unwrap();
 
         println!("-- Response code --\n{:?}", response.response_code);
         if let Ok(payload) = String::from_utf8(response.payload.value().to_vec()) {
