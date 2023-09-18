@@ -5,9 +5,9 @@ use std::{
 
 use clap::Args;
 use coapium::{
-    synchronous::{put, put_payload},
     client::url::Url,
     codec::{option::ContentFormat, MediaType, Payload},
+    synchronous::{put, put_payload},
 };
 
 use crate::common::{parse_content_format, parse_url};

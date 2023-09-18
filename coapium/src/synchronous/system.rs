@@ -1,10 +1,11 @@
 use std::{
+    io::ErrorKind,
     net::UdpSocket,
     sync::{
         mpsc::{channel, Receiver, Sender},
         Arc,
     },
-    time::Instant, io::ErrorKind,
+    time::Instant,
 };
 
 use log::error;

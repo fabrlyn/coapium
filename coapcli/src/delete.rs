@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use clap::Args;
-use coapium::{synchronous::delete, client::url::Url};
+use coapium::{client::url::Url, synchronous::delete};
 
 use crate::common::parse_url;
 

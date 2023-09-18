@@ -7,7 +7,8 @@ use crate::{
     client::url::Url,
     codec::{
         message::{DeleteOptions, GetOptions, PostOptions, PutOptions},
-        Payload, option::ContentFormat,
+        option::ContentFormat,
+        Payload,
     },
     protocol::{
         delete::Delete,
