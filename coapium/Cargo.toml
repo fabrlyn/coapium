@@ -1,0 +1,24 @@
+[package]
+name = "coapium"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "coapium"
+
+[dependencies]
+hex = "0.4.3"
+log = "0.4.17"
+rand = "0.8.5"
+tokio = { version = "1.28.1", features = ["full"] }
+url = "2.3.1"
+urlencoding = "2.1.2"
+uuid = { version = "1.3.1", features = ["v4"] }
+
+[dev-dependencies]
+rstest = "0.17.0"
+pretty_assertions = "1.3.0"
+quickcheck = "1.0.3"
+quickcheck_macros = "1.0.0"
