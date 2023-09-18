@@ -21,8 +21,15 @@ pub struct Client {
 fn run_loop(mut system: System, message_id_store: MessageIdStore) -> Result<(), ()> {
     let mut processor = Processor::new(message_id_store);
     loop {
-        let event = system.poll()?;
-        let effects = processor.tick(event).map_err(|_| ())?;
+        let events = system.poll()?;
+        let effects = events
+            .into_iter()
+            .map(|event| processor.tick(event))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| ())?;
+
+        let effects = effects.into_iter().flatten().collect();
+
         system.dispatch(effects)?;
     }
 }
@@ -39,7 +46,6 @@ impl Client {
                 .map(|p| p.value())
                 .unwrap_or(Default::default())
         );
-        println!("{:?}", connect_address);
         socket.connect(&connect_address).unwrap();
 
         let initial_message_id = MessageId::from_value(rand::random());
@@ -54,13 +60,13 @@ impl Client {
     }
 
     pub fn execute(&self, request: NewRequest) -> Result<Response, response::Error> {
-        let (sender, mut receiver) = System::new_request_channel();
+        let (sender, receiver) = System::new_request_channel();
         self.request_sender
             .send(Command::Request(request, sender))
             .expect("Failed to send to system");
 
         use system::Request::*;
-        let (_token, mut receiver) = match receiver
+        let (_token, receiver) = match receiver
             .recv()
             .expect("Failed to receive request accepted from system")
         {

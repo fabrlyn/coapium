@@ -2,9 +2,9 @@ use std::{
     net::UdpSocket,
     sync::{
         mpsc::{channel, Receiver, Sender},
-        Arc, Mutex,
+        Arc,
     },
-    thread::spawn,
+    time::Instant,
 };
 
 use log::error;
@@ -13,13 +13,9 @@ use crate::{
     codec::Token,
     protocol::{
         effect::{Effect, Effects, Timeout},
-        event::Event,
+        event::{Event, Events},
         new_request::NewRequest,
         response::{self, Response},
-        timeout::{
-            ExchangeLifetimeTimeout, MaxTransmitWaitTimeout, NonLifetimeTimeout,
-            NonRetransmissionTimeout, RetransmissionTimeout,
-        },
         transaction::PATH_MTU,
     },
 };
@@ -34,18 +30,15 @@ pub enum Request {
 pub enum Command {
     Request(NewRequest, Sender<Request>),
     Cancel(Token),
-    // Observe(...), maybe or Request is good enough
 }
 
 #[derive(Debug)]
 pub struct System {
     requests: Vec<(Token, Sender<Result<Response, response::Error>>)>,
-    command_receiver: Arc<Mutex<Receiver<Command>>>,
     command_sender: Sender<Command>,
-    timeout_receiver: Arc<Mutex<Receiver<Timeout>>>,
-    timeout_sender: Sender<Timeout>,
-    incoming_socket_receiver: Arc<Mutex<Receiver<Vec<u8>>>>,
+    command_receiver: Receiver<Command>,
     udp_socket: Arc<UdpSocket>,
+    timeouts: Vec<(Instant, Timeout)>,
 }
 
 impl System {
@@ -54,32 +47,16 @@ impl System {
     }
 
     pub fn new(udp_socket: UdpSocket) -> Self {
-        let (incoming_socket_sender, incoming_socket_receiver) = channel::<Vec<u8>>();
-
         let udp_socket = Arc::new(udp_socket);
 
-        let socket_for_loop = udp_socket.clone();
-        spawn(move || loop {
-            let mut buffer = [0u8; PATH_MTU];
-
-            let read = socket_for_loop.recv(&mut buffer).unwrap();
-            if let Err(e) = incoming_socket_sender.send(buffer[..read].to_vec()) {
-                println!("Failed to send data on incoming socket sender: {e:?}");
-                return;
-            }
-        });
-
         let (command_sender, command_receiver) = channel();
-        let (timeout_sender, timeout_receiver) = channel();
 
         Self {
             udp_socket,
-            incoming_socket_receiver: Arc::new(Mutex::new(incoming_socket_receiver)),
-            timeout_receiver: Arc::new(Mutex::new(timeout_receiver)),
-            timeout_sender,
-            command_receiver: Arc::new(Mutex::new(command_receiver)),
             command_sender,
+            command_receiver,
             requests: Default::default(),
+            timeouts: vec![],
         }
     }
 
@@ -117,106 +94,40 @@ impl System {
         Ok(Event::TransactionRequested(request, token))
     }
 
-    fn on_timeout(&mut self, timeout: Timeout) -> Result<Event, ()> {
-        Ok(Event::TimeoutReached(timeout))
-    }
+    pub fn poll(&mut self) -> Result<Events, ()> {
+        let mut events = vec![];
 
-    fn on_socket_data(&mut self, data: Vec<u8>) -> Result<Event, ()> {
-        Ok(Event::DataReceived(data))
-    }
+        let mut buffer = [0u8; PATH_MTU];
+        let read = self.udp_socket.recv(&mut buffer).unwrap();
 
-    pub fn poll(&mut self) -> Result<Event, ()> {
-        let command_receiver = self.command_receiver.clone();
-        let command_receiver = &mut command_receiver.lock();
-        //let command_future = command_receiver.recv();
-        //pin!(command_future);
+        events.push(Event::DataReceived(buffer[..read].to_vec()));
 
-        let timeouts_receiver = self.timeout_receiver.clone();
-        let timeouts_receiver = &mut timeouts_receiver.lock();
-        //let timeouts_future = timeouts_receiver.recv();
-        //pin!(timeouts_future);
+        let now = Instant::now();
+        while let Some(index) = self
+            .timeouts
+            .iter()
+            .position(|(timeout_at, _)| now >= *timeout_at)
+        {
+            let timeout = self.timeouts.swap_remove(index).1;
+            events.push(Event::TimeoutReached(timeout));
+        }
 
-        let socket_receiver = self.incoming_socket_receiver.clone();
-        let socket_receiver = &mut socket_receiver.lock();
-        //let socket_future = socket_receiver.recv();
-        //pin!(socket_future);
+        match self.command_receiver.try_recv() {
+            Ok(command) => {
+                events.push(self.on_command(command)?);
+            }
+            Err(e) => match e {
+                std::sync::mpsc::TryRecvError::Empty => {}
+                std::sync::mpsc::TryRecvError::Disconnected => return Err(()),
+            },
+        }
 
-        //select! {
-        //    result = &mut command_future => {
-        //        return self.on_command(result.ok_or(())?)
-        //    }
-        //    result = &mut timeouts_future => {
-        //        return self.on_timeout(result.ok_or(())?)
-        //    }
-        //    result = &mut socket_future => {
-        //        return self.on_socket_data(result.ok_or(())?)
-        //    }
-        //};
-        todo!()
-    }
-
-    fn on_non_lifetime_timeout(&mut self, timeout: NonLifetimeTimeout) {
-        let timeout_sender = self.timeout_sender.clone();
-        //tokio::spawn(|| {
-        //    sleep(*timeout.timeout());
-        //    if let Err(e) = timeout_sender.send(Timeout::NonLifetime(timeout)) {
-        //        error!("Failed to send non lifetime timeout: {e:?}");
-        //    }
-        //});
-    }
-
-    fn on_con_lifetime_timeout(&mut self, exchange_lifetime_timeout: ExchangeLifetimeTimeout) {
-        //let timeout_sender = self.timeout_sender.clone();
-        //tokio::spawn(move {
-        //    sleep(*exchange_lifetime_timeout.timeout());
-        //    if let Err(e) = timeout_sender.send(exchange_lifetime_timeout.into()) {
-        //        error!("Failed to send exchange timeout: {e:?}");
-        //    }
-        //});
-    }
-
-    fn on_retransmission_timeout(&mut self, timeout: RetransmissionTimeout) {
-        //let timeout_sender = self.timeout_sender.clone();
-        //tokio::spawn(move {
-        //    sleep(*timeout.timeout());
-        //    if let Err(e) = timeout_sender.send(timeout.into()) {
-        //        error!("Failed to send retransmission timeout: {e:?}");
-        //    }
-        //});
-    }
-
-    fn on_non_retransmission_timeout(&mut self, timeout: NonRetransmissionTimeout) {
-        //let timeout_sender = self.timeout_sender.clone();
-        //tokio::spawn(move {
-        //    sleep(*timeout.timeout());
-        //    if let Err(e) = timeout_sender.send(timeout.into()) {
-        //        error!("Failed to send non retransmission timeout: {e:?}");
-        //    }
-        //});
-    }
-
-    fn on_max_transmit_wait(&mut self, timeout: MaxTransmitWaitTimeout) {
-        //let timeout_sender = self.timeout_sender.clone();
-        //tokio::spawn(||{
-        //    sleep(*timeout.timeout());
-        //    if let Err(e) = timeout_sender.send(timeout.into()) {
-        //        error!("Failed to send max transmit wait timeout: {e:?}");
-        //    }
-        //});
+        Ok(events)
     }
 
     fn on_create_timeout(&mut self, timeout: Timeout) {
-        match timeout {
-            Timeout::NonLifetime(timeout) => self.on_non_lifetime_timeout(timeout),
-            Timeout::Retransmission(retransmission_timeout) => {
-                self.on_retransmission_timeout(retransmission_timeout)
-            }
-            Timeout::ExchangeLifetime(exchange_lifetime_timeout) => {
-                self.on_con_lifetime_timeout(exchange_lifetime_timeout)
-            }
-            Timeout::MaxTransmitWait(timeout) => self.on_max_transmit_wait(timeout),
-            Timeout::NonRetransmission(timeout) => self.on_non_retransmission_timeout(timeout),
-        }
+        let timeout_at = Instant::now() + *timeout.duration();
+        self.timeouts.push((timeout_at, timeout))
     }
 
     fn remove_request_by_token(

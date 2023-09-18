@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::protocol::timeout::{
     ExchangeLifetimeTimeout, MaxTransmitWaitTimeout, NonLifetimeTimeout, NonRetransmissionTimeout,
     RetransmissionTimeout,
@@ -10,6 +12,18 @@ pub enum Timeout {
     NonLifetime(NonLifetimeTimeout),
     NonRetransmission(NonRetransmissionTimeout),
     Retransmission(RetransmissionTimeout),
+}
+
+impl Timeout {
+    pub fn duration(&self) -> &Duration {
+        match self {
+            Timeout::ExchangeLifetime(t) => t.timeout(),
+            Timeout::MaxTransmitWait(t) => t.timeout(),
+            Timeout::NonLifetime(t) => t.timeout(),
+            Timeout::NonRetransmission(t) => t.timeout(),
+            Timeout::Retransmission(t) => t.timeout(),
+        }
+    }
 }
 
 impl From<MaxTransmitWaitTimeout> for Timeout {

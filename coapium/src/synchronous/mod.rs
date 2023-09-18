@@ -20,6 +20,7 @@ use crate::{
         response::{self, Response},
         transmission_parameters::{ConfirmableParameters, InitialRetransmissionFactor},
     },
+    synchronous::client::Client,
 };
 
 pub fn get(url: Url) -> Result<Response, response::Error> {
@@ -27,7 +28,7 @@ pub fn get(url: Url) -> Result<Response, response::Error> {
 }
 
 pub fn request(method: Method, url: Url) -> Result<Response, response::Error> {
-    //let client = Client::new(url.clone().into());
+    let client = Client::new(url.clone().into());
 
     let reliability = default_reliability();
 
@@ -76,8 +77,7 @@ pub fn request(method: Method, url: Url) -> Result<Response, response::Error> {
         }
     };
 
-    todo!()
-    //client.send(request)
+    client.execute(request)
 }
 
 fn initial_retransmission_factor() -> InitialRetransmissionFactor {

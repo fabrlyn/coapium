@@ -110,11 +110,11 @@ mod tests {
         protocol::{
             effect::Effect,
             get::Get,
+            new_request::NewRequest,
             reliability::Reliability,
             timeout::{ExchangeLifetimeTimeout, RetransmissionTimeout},
             transmission_parameters::{ConfirmableParameters, InitialRetransmissionFactor},
         },
-        NewRequest,
     };
 
     use super::ConfirmableTransaction;
