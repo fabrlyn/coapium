@@ -3,7 +3,7 @@ use std::error::Error;
 use clap::Args;
 use coapium::{client::url::Url, synchronous::get};
 
-use crate::common::parse_url;
+use crate::common::{parse_payload_type, parse_url, PayloadType};
 
 // TODO: There are two main ways of doing requests.
 // Either assume that all the values are urlencoded already or not.
@@ -34,17 +34,28 @@ use crate::common::parse_url;
 pub struct Get {
     #[arg(long, value_parser = parse_url)]
     url: Url,
+
+    #[arg(long, value_parser = parse_payload_type, default_missing_value = "string")]
+    payload_type: PayloadType,
 }
 
 impl Get {
     pub fn run(self) -> Result<(), Box<dyn Error>> {
         let response = get(self.url).unwrap();
 
-        println!("-- Response code --\n{:?}", response.response_code);
-        if let Ok(payload) = String::from_utf8(response.payload.value().to_vec()) {
-            println!("-- Payload -- \n{payload}");
-        } else {
-            println!("-- Payload -- \n{:?}", response.payload.value());
+        println!("{:?}", response.response_code);
+        match self.payload_type {
+            PayloadType::String => {
+                if let Ok(payload) = String::from_utf8(response.payload.value().to_vec()) {
+                    println!("-- Payload -- \n{payload}");
+                }
+            }
+            PayloadType::Octets => todo!(),
+            PayloadType::UnsignedInteger => {
+                let value: [u8; 4] = response.payload.value().try_into().unwrap();
+                let value = u32::from_be_bytes(value);
+                println!("{}", value);
+            }
         }
 
         Ok(())
