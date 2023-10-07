@@ -123,7 +123,6 @@ mod tests {
     };
 
     #[rstest]
-    #[ignore]
     #[case(
         MessageId::from_value(1),
         TokenLength::from_value(1).unwrap(),

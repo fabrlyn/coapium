@@ -4,6 +4,7 @@ pub mod event;
 pub mod get;
 pub mod message_id_store;
 pub mod new_request;
+pub mod ping;
 pub mod post;
 pub mod processor;
 pub mod put;
