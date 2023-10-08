@@ -4,7 +4,7 @@ pub mod system;
 use rand::{thread_rng, Rng};
 
 use crate::{
-    client::{into_ping_result, url::Url, PingError},
+    client::url::Url,
     codec::{
         message::{DeleteOptions, GetOptions, PostOptions, PutOptions},
         option::ContentFormat,
@@ -14,7 +14,7 @@ use crate::{
         delete::Delete,
         get::Get,
         new_request::NewRequest,
-        ping::Ping,
+        ping::{self, Ping},
         post::Post,
         put::Put,
         reliability::Reliability,
@@ -25,7 +25,7 @@ use crate::{
     synchronous::client::Client,
 };
 
-fn default_parameters() -> ConfirmableParameters {
+pub fn default_parameters() -> ConfirmableParameters {
     ConfirmableParameters::new(
         Default::default(),
         Default::default(),
@@ -34,7 +34,7 @@ fn default_parameters() -> ConfirmableParameters {
     )
 }
 
-fn default_reliability() -> Reliability {
+pub fn default_reliability() -> Reliability {
     Reliability::Confirmable(default_parameters())
 }
 
@@ -46,12 +46,10 @@ fn initial_retransmission_factor() -> InitialRetransmissionFactor {
     InitialRetransmissionFactor::new(thread_rng().gen_range(0.0..1.0)).unwrap()
 }
 
-pub fn ping(url: Url) -> Result<(), PingError> {
-    let result = Client::new(url.clone().into()).execute(NewRequest::Ping(Ping {
+pub fn ping(url: Url) -> Result<(), ping::Error> {
+    Client::new(url.clone().into()).ping(Ping {
         confirmable_parameters: default_parameters(),
-    }));
-
-    into_ping_result(result)
+    })
 }
 
 pub fn post(url: Url) -> Result<Response, response::Error> {

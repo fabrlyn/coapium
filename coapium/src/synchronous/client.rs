@@ -1,10 +1,15 @@
-use std::{net::UdpSocket, sync::mpsc::Sender, thread::spawn};
+use std::{
+    net::UdpSocket,
+    sync::mpsc::{channel, Sender},
+    thread::spawn,
+};
 
 use crate::{
     codec::{url::Endpoint, MessageId},
     protocol::{
         message_id_store::MessageIdStore,
         new_request::NewRequest,
+        ping::{self, Ping},
         processor::Processor,
         response::{self, Response},
     },
@@ -57,6 +62,24 @@ impl Client {
         spawn(|| run_loop(system, message_id_store));
 
         Self { request_sender }
+    }
+
+    pub fn ping(&self, ping: Ping) -> Result<(), ping::Error> {
+        let (sender, receiver) = channel();
+        self.request_sender
+            .send(Command::Ping(ping, sender))
+            .expect("Failed to send to system");
+        let (_token, receiver) = match receiver
+            .recv()
+            .expect("Failed to receive request accepted from system")
+        {
+            Ok((token, receiver)) => (token, receiver),
+            _ => unreachable!(),
+        };
+
+        receiver
+            .recv()
+            .expect("Failed to receive from response from system")
     }
 
     pub fn execute(&self, request: NewRequest) -> Result<Response, response::Error> {

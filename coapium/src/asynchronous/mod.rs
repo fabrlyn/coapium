@@ -1,7 +1,6 @@
 pub mod client;
 pub mod system;
 
-use crate::client::{into_ping_result, PingError};
 use crate::codec::message::{DeleteOptions, GetOptions, PostOptions, PutOptions};
 use crate::codec::option::ContentFormat;
 use crate::codec::TokenLength;
@@ -9,7 +8,7 @@ use crate::codec::{Payload, Token};
 use crate::protocol::delete::Delete;
 use crate::protocol::get::Get;
 use crate::protocol::new_request::NewRequest;
-use crate::protocol::ping::Ping;
+use crate::protocol::ping::{self, Ping};
 use crate::protocol::post::Post;
 use crate::protocol::put::Put;
 use crate::protocol::reliability::Reliability;
@@ -26,11 +25,11 @@ use crate::client::url::Url;
 
 use self::response::Response;
 
-fn default_reliability() -> Reliability {
+pub fn default_reliability() -> Reliability {
     Reliability::Confirmable(default_parameters())
 }
 
-fn default_parameters() -> ConfirmableParameters {
+pub fn default_parameters() -> ConfirmableParameters {
     ConfirmableParameters::new(
         Default::default(),
         Default::default(),
@@ -51,15 +50,13 @@ fn initial_retransmission_factor() -> InitialRetransmissionFactor {
     InitialRetransmissionFactor::new(thread_rng().gen_range(0.0..1.0)).unwrap()
 }
 
-pub async fn ping(url: Url) -> Result<(), PingError> {
-    let result = Client::new(url.clone().into())
+pub async fn ping(url: Url) -> Result<(), ping::Error> {
+    Client::new(url.clone().into())
         .await
-        .execute(NewRequest::Ping(Ping {
+        .ping(Ping {
             confirmable_parameters: default_parameters(),
-        }))
-        .await;
-
-    into_ping_result(result)
+        })
+        .await
 }
 
 pub async fn post(url: Url) -> Result<Response, response::Error> {
