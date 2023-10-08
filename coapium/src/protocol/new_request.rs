@@ -15,21 +15,21 @@ pub enum NewRequest {
 impl NewRequest {
     pub fn encode(self, message_id: MessageId, token: Token) -> Vec<u8> {
         match self {
-            NewRequest::Ping(request) => request.encode(message_id, token),
+            NewRequest::Delete(request) => request.encode(message_id, token),
             NewRequest::Get(request) => request.encode(message_id, token),
+            NewRequest::Ping(request) => request.encode(message_id, token),
             NewRequest::Post(request) => request.encode(message_id, token),
             NewRequest::Put(request) => request.encode(message_id, token),
-            NewRequest::Delete(request) => request.encode(message_id, token),
         }
     }
 
     pub fn reliability(&self) -> Reliability {
         match self {
-            NewRequest::Ping(ping) => Reliability::Confirmable(ping.confirmable_parameters),
+            NewRequest::Delete(delete) => delete.reliability,
             NewRequest::Get(get) => get.reliability,
+            NewRequest::Ping(ping) => Reliability::Confirmable(ping.confirmable_parameters),
             NewRequest::Post(post) => post.reliability,
             NewRequest::Put(put) => put.reliability,
-            NewRequest::Delete(delete) => delete.reliability,
         }
     }
 }

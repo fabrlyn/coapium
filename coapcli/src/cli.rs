@@ -27,9 +27,9 @@ impl Cli {
         match cli.commands {
             Commands::Delete(command) => command.run(),
             Commands::Get(command) => command.run(),
+            Commands::Ping(command) => command.run(),
             Commands::Post(command) => command.run(),
             Commands::Put(command) => command.run(),
-            Commands::Ping(command) => command.run(),
         }
     }
 }
