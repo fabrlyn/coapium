@@ -2,9 +2,9 @@ mod cli;
 mod common;
 mod delete;
 mod get;
+mod ping;
 mod post;
 mod put;
-mod ping;
 
 use std::error::Error;
 
