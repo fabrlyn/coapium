@@ -2,14 +2,15 @@ use std::error::Error;
 
 use clap::{command, Parser, Subcommand};
 
-use crate::{delete::Delete, get::Get, post::Post, put::Put};
+use crate::{delete::Delete, get::Get, ping::Ping, post::Post, put::Put};
 
 #[derive(Debug, Clone, Subcommand)]
 enum Commands {
+    Delete(Delete),
     Get(Get),
+    Ping(Ping),
     Post(Post),
     Put(Put),
-    Delete(Delete),
 }
 
 #[derive(Debug, Parser)]
@@ -24,10 +25,11 @@ impl Cli {
         let cli = Cli::parse();
 
         match cli.commands {
+            Commands::Delete(command) => command.run(),
             Commands::Get(command) => command.run(),
             Commands::Post(command) => command.run(),
             Commands::Put(command) => command.run(),
-            Commands::Delete(command) => command.run(),
+            Commands::Ping(command) => command.run(),
         }
     }
 }

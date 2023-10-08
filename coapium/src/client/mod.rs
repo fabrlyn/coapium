@@ -1,9 +1,13 @@
 pub mod url;
 
 use crate::{
-    codec::option::{UriHost, UriPath, UriPort, UriQuery},
+    codec::{
+        self,
+        option::{UriHost, UriPath, UriPort, UriQuery},
+    },
     protocol::{
         reliability::Reliability,
+        response::{self, Response},
         transmission_parameters::{ConfirmableParameters, NonConfirmableParameters},
     },
 };
@@ -310,5 +314,27 @@ impl RequestBuilder for DeleteRequestBuilder {
 
     fn query_parameter(self, query: UriQuery) -> Self {
         self.query_parameter(query)
+    }
+}
+
+// TODO: Investigate how this could be incorporated deeper into the library.
+// This might be fine, but needs a look.
+#[derive(Debug)]
+pub enum PingError {
+    UnexpectedResponse(Response),
+    AcknowledgementTimeout,
+    Codec(codec::Error),
+    Timeout,
+}
+
+pub fn into_ping_result(result: Result<Response, response::Error>) -> Result<(), PingError> {
+    match result {
+        Ok(response) => Err(PingError::UnexpectedResponse(response)),
+        Err(error) => match error {
+            response::Error::AcknowledgementTimeout => Err(PingError::AcknowledgementTimeout),
+            response::Error::Codec(error) => Err(PingError::Codec(error)),
+            response::Error::Reset => Ok(()),
+            response::Error::Timeout => Err(PingError::Timeout),
+        },
     }
 }

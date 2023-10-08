@@ -1,6 +1,7 @@
 pub mod client;
 pub mod system;
 
+use crate::client::{into_ping_result, PingError};
 use crate::codec::message::{DeleteOptions, GetOptions, PostOptions, PutOptions};
 use crate::codec::option::ContentFormat;
 use crate::codec::TokenLength;
@@ -50,13 +51,15 @@ fn initial_retransmission_factor() -> InitialRetransmissionFactor {
     InitialRetransmissionFactor::new(thread_rng().gen_range(0.0..1.0)).unwrap()
 }
 
-pub async fn ping(url: Url) -> Result<Response, response::Error> {
-    Client::new(url.clone().into())
+pub async fn ping(url: Url) -> Result<(), PingError> {
+    let result = Client::new(url.clone().into())
         .await
         .execute(NewRequest::Ping(Ping {
             confirmable_parameters: default_parameters(),
         }))
-        .await
+        .await;
+
+    into_ping_result(result)
 }
 
 pub async fn post(url: Url) -> Result<Response, response::Error> {

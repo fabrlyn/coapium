@@ -4,6 +4,7 @@ mod delete;
 mod get;
 mod post;
 mod put;
+mod ping;
 
 use std::error::Error;
 
