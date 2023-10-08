@@ -1,4 +1,5 @@
 use crate::protocol::{
+    ping::{self, Ping},
     timeout::{
         ExchangeLifetimeTimeout, MaxTransmitWaitTimeout, NonLifetimeTimeout,
         NonRetransmissionTimeout, RetransmissionTimeout,
@@ -37,15 +38,24 @@ pub enum Request {
 }
 
 #[derive(Debug)]
+pub enum RequestSender {
+    Ping(Sender<Result<(), ping::Error>>),
+    Request(Sender<Result<Response, response::Error>>),
+}
+
+#[derive(Debug)]
 pub enum Command {
     Request(NewRequest, Sender<Request>),
     Cancel(Token),
-    // Observe(...), maybe or Request is good enough
+    Ping(
+        Ping,
+        Sender<Result<(Token, Receiver<Result<(), ping::Error>>), ()>>,
+    ),
 }
 
 #[derive(Debug)]
 pub struct System {
-    requests: Vec<(Token, Sender<Result<Response, response::Error>>)>,
+    requests: Vec<(Token, RequestSender)>,
     command_receiver: Arc<Mutex<UnboundedReceiver<Command>>>,
     command_sender: UnboundedSender<Command>,
     timeout_receiver: Arc<Mutex<UnboundedReceiver<Timeout>>>,
@@ -98,12 +108,32 @@ impl System {
         match command {
             Command::Request(request, sender) => self.handle_request(request, sender).await,
             Command::Cancel(token) => self.handle_cancel(token),
+            Command::Ping(ping, sender) => self.ping(ping, sender).await,
         }
     }
 
     fn handle_cancel(&mut self, token: Token) -> Result<Event, ()> {
         self.requests.retain(|(t, _)| *t == token);
         Ok(Event::TransactionCanceled(token))
+    }
+
+    async fn ping(
+        &mut self,
+        ping: Ping,
+        sender: Sender<Result<(Token, Receiver<Result<(), ping::Error>>), ()>>,
+    ) -> Result<Event, ()> {
+        let token = Token::new().map_err(|_| ())?;
+
+        let (result_sender, result_receiver) = channel(1);
+        if let Err(e) = sender.send(Ok((token.clone(), result_receiver))).await {
+            error!("Failed to send Request::Accepted to client: {e:?}");
+            return Err(());
+        }
+
+        self.requests
+            .push((token.clone(), RequestSender::Ping(result_sender)));
+
+        Ok(Event::TransactionRequested(NewRequest::Ping(ping), token))
     }
 
     async fn handle_request(
@@ -122,7 +152,8 @@ impl System {
             return Err(());
         }
 
-        self.requests.push((token.clone(), result_sender));
+        self.requests
+            .push((token.clone(), RequestSender::Request(result_sender)));
 
         Ok(Event::TransactionRequested(request, token))
     }
@@ -234,10 +265,7 @@ impl System {
         }
     }
 
-    fn remove_request_by_token(
-        &mut self,
-        token: &Token,
-    ) -> Option<Sender<Result<Response, response::Error>>> {
+    fn remove_request_by_token(&mut self, token: &Token) -> Option<RequestSender> {
         let Some(position) = self
             .requests
             .iter()
@@ -254,7 +282,7 @@ impl System {
         token: Token,
         result: Result<Response, response::Error>,
     ) {
-        let Some(request) = self.remove_request_by_token(&token) else {
+        let Some(RequestSender::Request(request)) = self.remove_request_by_token(&token) else {
             return;
         };
         if let Err(e) = request.send(result).await {

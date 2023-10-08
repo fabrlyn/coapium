@@ -16,6 +16,7 @@ use crate::{
         effect::{Effect, Effects, Timeout},
         event::{Event, Events},
         new_request::NewRequest,
+        ping::{self, Ping},
         response::{self, Response},
         transaction::PATH_MTU,
     },
@@ -28,14 +29,24 @@ pub enum Request {
 }
 
 #[derive(Debug)]
+pub enum RequestSender {
+    Ping(Sender<Result<(), ping::Error>>),
+    Request(Sender<Result<Response, response::Error>>),
+}
+
+#[derive(Debug)]
 pub enum Command {
     Request(NewRequest, Sender<Request>),
     Cancel(Token),
+    Ping(
+        Ping,
+        Sender<Result<(Token, Receiver<Result<(), ping::Error>>), ()>>,
+    ),
 }
 
 #[derive(Debug)]
 pub struct System {
-    requests: Vec<(Token, Sender<Result<Response, response::Error>>)>,
+    requests: Vec<(Token, RequestSender)>,
     command_sender: Sender<Command>,
     command_receiver: Receiver<Command>,
     udp_socket: Arc<UdpSocket>,
@@ -69,12 +80,32 @@ impl System {
         match command {
             Command::Request(request, sender) => self.handle_request(request, sender),
             Command::Cancel(token) => self.handle_cancel(token),
+            Command::Ping(ping, sender) => self.ping(ping, sender),
         }
     }
 
     fn handle_cancel(&mut self, token: Token) -> Result<Event, ()> {
         self.requests.retain(|(t, _)| *t == token);
         Ok(Event::TransactionCanceled(token))
+    }
+
+    fn ping(
+        &mut self,
+        ping: Ping,
+        sender: Sender<Result<(Token, Receiver<Result<(), ping::Error>>), ()>>,
+    ) -> Result<Event, ()> {
+        let token = Token::new().map_err(|_| ())?;
+
+        let (result_sender, result_receiver) = channel();
+        if let Err(e) = sender.send(Ok((token.clone(), result_receiver))) {
+            error!("Failed to send Request::Accepted to client: {e:?}");
+            return Err(());
+        }
+
+        self.requests
+            .push((token.clone(), RequestSender::Ping(result_sender)));
+
+        Ok(Event::TransactionRequested(NewRequest::Ping(ping), token))
     }
 
     fn handle_request(
@@ -90,7 +121,8 @@ impl System {
             return Err(());
         }
 
-        self.requests.push((token.clone(), result_sender));
+        self.requests
+            .push((token.clone(), RequestSender::Request(result_sender)));
 
         Ok(Event::TransactionRequested(request, token))
     }
@@ -140,10 +172,7 @@ impl System {
         self.timeouts.push((timeout_at, timeout))
     }
 
-    fn remove_request_by_token(
-        &mut self,
-        token: &Token,
-    ) -> Option<Sender<Result<Response, response::Error>>> {
+    fn remove_request_by_token(&mut self, token: &Token) -> Option<RequestSender> {
         let Some(position) = self
             .requests
             .iter()
@@ -159,7 +188,27 @@ impl System {
         let Some(request) = self.remove_request_by_token(&token) else {
             return;
         };
-        if let Err(e) = request.send(result) {
+
+        match request {
+            RequestSender::Ping(sender) => Self::on_ping_resolved(sender, result),
+            RequestSender::Request(sender) => Self::on_request_resolved(sender, result),
+        }
+    }
+
+    fn on_request_resolved(
+        sender: Sender<Result<Response, response::Error>>,
+        result: Result<Response, response::Error>,
+    ) {
+        if let Err(e) = sender.send(result) {
+            error!("Failed to send resolved transaction to requester: {e:?}");
+        }
+    }
+
+    fn on_ping_resolved(
+        sender: Sender<Result<(), ping::Error>>,
+        result: Result<Response, response::Error>,
+    ) {
+        if let Err(e) = sender.send(ping::into_result(result)) {
             error!("Failed to send resolved transaction to requester: {e:?}");
         }
     }
