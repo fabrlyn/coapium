@@ -282,10 +282,30 @@ impl System {
         token: Token,
         result: Result<Response, response::Error>,
     ) {
-        let Some(RequestSender::Request(request)) = self.remove_request_by_token(&token) else {
+        let Some(request) = self.remove_request_by_token(&token) else {
             return;
         };
-        if let Err(e) = request.send(result).await {
+
+        match request {
+            RequestSender::Ping(sender) => Self::on_ping_resolved(sender, result).await,
+            RequestSender::Request(sender) => Self::on_request_resolved(sender, result).await,
+        }
+    }
+
+    async fn on_request_resolved(
+        sender: Sender<Result<Response, response::Error>>,
+        result: Result<Response, response::Error>,
+    ) {
+        if let Err(e) = sender.send(result).await {
+            error!("Failed to send resolved transaction to requester: {e:?}");
+        }
+    }
+
+    async fn on_ping_resolved(
+        sender: Sender<Result<(), ping::Error>>,
+        result: Result<Response, response::Error>,
+    ) {
+        if let Err(e) = sender.send(ping::into_result(result)).await {
             error!("Failed to send resolved transaction to requester: {e:?}");
         }
     }
