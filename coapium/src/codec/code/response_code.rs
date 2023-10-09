@@ -92,6 +92,13 @@ impl ResponseCode {
     pub const fn decode_server_error(detail: Detail) -> ResponseCode {
         ResponseCode::ServerError(ServerError::decode(detail))
     }
+
+    pub const fn is_success(&self) -> bool {
+        match self {
+            ResponseCode::Success(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl Success {
